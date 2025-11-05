@@ -70,3 +70,21 @@ git commit -m "Initial FastAPI project setup"
 - Add more routes or routers under `app/`.
 - Configure settings via environment variables or a configuration module.
 - Add tests (e.g., with `pytest`) and wire them into your workflow.
+
+## Research & Report Assistant
+The `app/agents/` package contains a LangGraph-based, multi-agent workflow featuring a supervisor, research lead, health, pharma, summary, and document specialists, plus a reporting agent. To use it:
+
+1. Define environment variables in `.env`:
+   ```bash
+   OPENAI_API_KEY=sk-...
+   TAVILY_API_KEY=tvly-...
+   ```
+2. Build the graph in Python:
+   ```python
+   from app.agents import create_research_assistant_graph, initialize_state
+
+   graph = create_research_assistant_graph()
+   state = initialize_state("Investigate recent advances in cardiology AI.")
+   result = graph.invoke(state)
+   ```
+3. The graph orchestrates research, domain analysis, outlining, and report drafting automatically.
