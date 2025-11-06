@@ -1,7 +1,7 @@
-from utils import LLMModel
-from core.agent_state import AgentState
+from app.utils.llms import LLMModel
+from app.core.agent_state import AgentState
 from langchain_core.messages import HumanMessage, AIMessage
-from langgraph import Command
+from langgraph.types import Command
 
 llm = LLMModel().get_model()
 

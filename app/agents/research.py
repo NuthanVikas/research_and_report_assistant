@@ -1,10 +1,11 @@
-from langgraph import Command
-from core.agent_state import AgentState
-from utils.llms import LLMModel
+from langgraph.types import Command
+from app.core.agent_state import AgentState
+from app.utils.llms import LLMModel
 from langchain_core.messages import SystemMessage, HumanMessage
-from core.routing_models import ResearchRouting
-from agents.subagents.health_agent import health_agent
-from agents.subagents.pharma_agent import pharma_agent
+from app.core.routing_models import ResearchRouting
+from app.agents.subagents.health_agent import health_agent
+from app.agents.subagents.pharma_agent import pharma_agent
+from typing import Literal
 
 llm = LLMModel().get_model()
 
@@ -48,4 +49,10 @@ def research_agent(state: AgentState) -> Command[str]:
     print(f"Routing Decision → {decision.next_agent}")
     print(f"Reasoning: {decision.reasoning}")
 
-    return Command(goto=decision.next_agent, update={"research_complete": True})
+    # return Command(goto=decision.next_agent, update={"research_complete": True})
+    
+    if decision.next_agent == "supervisor":
+      return Command(goto=decision.next_agent, update={"research_complete": True})
+    else:
+      return Command(goto=decision.next_agent, update={})
+

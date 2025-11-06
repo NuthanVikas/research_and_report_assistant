@@ -2,7 +2,7 @@ python-dotenv
 langchain
 langchain-openai
 langchain-community
-langchain_core
+langchain-core
 langgraph
 tavily-python
 langchain_groq
