@@ -15,8 +15,7 @@ def _prefixed_route(message: str) -> str | None:
     if first_line.startswith("[HEALTH RESEARCH]") or first_line.startswith("[PHARMA RESEARCH]"):
         return "summary_agent"
     if first_line.startswith("[SUMMARY]"):
-        # return "document_agent"
-        return "complete"
+        return "document_agent"
     if first_line.startswith("[REPORT]"):
         return "complete"
     return None

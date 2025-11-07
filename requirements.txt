@@ -7,3 +7,4 @@ langgraph
 tavily-python
 langchain_groq
 fastapi
+reportlab
