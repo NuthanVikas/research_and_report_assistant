@@ -38,7 +38,6 @@ def research_agent(state: AgentState) -> Command[str]:
     }
     """
 
-    # Use structured output with Pydantic model
     structured_llm = llm.with_structured_output(ResearchRouting)
 
     decision = structured_llm.invoke([
@@ -49,7 +48,6 @@ def research_agent(state: AgentState) -> Command[str]:
     print(f"Routing Decision → {decision.next_agent}")
     print(f"Reasoning: {decision.reasoning}")
 
-    # return Command(goto=decision.next_agent, update={"research_complete": True})
     
     if decision.next_agent == "supervisor":
       return Command(goto=decision.next_agent, update={"research_complete": True})

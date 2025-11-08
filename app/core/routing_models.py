@@ -15,5 +15,6 @@ class SupervisorRouting(BaseModel):
     """Decision model for supervisor routing"""
     next_agent: Literal["research_agent", "report_agent", "end"]
     reasoning: str
+    response:str = ""
 
 

@@ -24,10 +24,11 @@ def pharma_agent(state: AgentState) -> Command[str]:
     """
 
     result = llm.invoke([HumanMessage(content=prompt)])
+    formatted_content = result.content.strip()
 
     return Command(
         goto="research_agent",
         update={
-            "messages": [AIMessage(content=f"[PHARMA RESEARCH]\n{result.content}")]
+            "messages": [AIMessage(content=f"PHARMA RESEARCH:\n{formatted_content}")]
         }
     )

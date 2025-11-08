@@ -34,34 +34,30 @@ def document_agent(state: AgentState) -> Command[str]:
     result = llm.invoke([HumanMessage(content=prompt)])
     formatted_content = result.content
     
-    #PDF file
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"reports/health_report_{timestamp}.pdf"
     
-    #reports directory if it doesn't exist
     os.makedirs("reports", exist_ok=True)
     
-    #Generate PDF
     doc = SimpleDocTemplate(filename, pagesize=letter)
     styles = getSampleStyleSheet()
     story = []
     
-    #Split content into paragraphs and add to PDF
     for line in formatted_content.split('\n'):
         if line.strip():
             if line.startswith('#'):
-                #Heading
                 para = Paragraph(line.replace('#', '').strip(), styles['Heading1'])
             else:
-                #Normal text
                 para = Paragraph(line, styles['BodyText'])
             story.append(para)
             story.append(Spacer(1, 12))
     
     doc.build(story)
     
-    # Return message with file path
-    response_message = f"[REPORT]\n\nReport generated successfully!\n\nFile saved at: {filename}\n\nContent:\n{formatted_content}"
+    response_message = (
+        f"REPORT:\n\nReport generated successfully!\n\n"
+        f"File saved at: {filename}\n\nContent:\n{formatted_content}"
+    )
     
     return Command(
         goto="report_agent",

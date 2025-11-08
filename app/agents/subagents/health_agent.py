@@ -16,8 +16,7 @@ def health_agent(state: AgentState) -> Command[str]:
     search_results = search_tool.invoke({"query": query})
 
     prompt = f"""
-    You are a medical research specialist. Provide a comprehensive summary of findings
-    from the search results for: "{query}"
+    Your task is to conduct in-depth research and gather accurate, evidence-based information on topics related to health, medicine, or clinical research for: "{query}"
 
     Results:
     {search_results}
@@ -26,10 +25,11 @@ def health_agent(state: AgentState) -> Command[str]:
     """
 
     result = llm.invoke([HumanMessage(content=prompt)])
+    formatted_content = result.content.strip()
 
     return Command(
         goto="research_agent",
         update={
-            "messages": [AIMessage(content=f"[HEALTH RESEARCH]\n{result.content}")]
+            "messages": [AIMessage(content=f"HEALTH RESEARCH:\n{formatted_content}")]
         }
     )

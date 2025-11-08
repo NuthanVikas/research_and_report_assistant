@@ -1,80 +1,89 @@
 from __future__ import annotations
 
+from typing import Any, Sequence
+
 from langgraph.types import Command
+from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 
 from app.core.agent_state import AgentState
 from app.core.routing_models import ReportRouting
 from app.utils.llms import LLMModel
-from langchain_core.messages import HumanMessage, SystemMessage
 
 llm = LLMModel().get_model()
 
 
-def _prefixed_route(message: str) -> str | None:
-    first_line = message.strip().split("\n", 1)[0].strip()
-    if first_line.startswith("[HEALTH RESEARCH]") or first_line.startswith("[PHARMA RESEARCH]"):
-        return "summary_agent"
-    if first_line.startswith("[SUMMARY]"):
-        return "document_agent"
-    if first_line.startswith("[REPORT]"):
-        return "complete"
-    return None
+def _stringify(message: BaseMessage | None) -> str:
+    if message is None:
+        return ""
+    content = message.content
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return " ".join(
+            (
+                fragment.get("text", "")
+                if isinstance(fragment, dict)
+                else str(fragment)
+            ).strip()
+            for fragment in content
+        )
+    return str(content)
+
+
+def _latest_user_request(messages: Sequence[BaseMessage]) -> str:
+    for message in reversed(messages):
+        if isinstance(message, HumanMessage):
+            return _stringify(message).strip()
+    return "No explicit user request found."
+
+
+def _finalize(latest_text: str) -> Command[str]:
+    final_text = latest_text.strip() or "Report agent did not receive content to finalize."
+    return Command(
+        goto="supervisor",
+        update={
+            "report_complete": True,
+            "final_output": final_text,
+        },
+    )
 
 
 def report_agent(state: AgentState) -> Command[str]:
-    """Coordinates report generation and determines follow-up steps."""
+    """Decide next reporting step using the LLM (summary, document, or finalize)."""
     print("\nReport Agent Active")
 
-    latest_message = state["messages"][-1].content
-    routed = _prefixed_route(latest_message)
+    messages: Sequence[BaseMessage] = state.get("messages", [])
+    latest_text = _stringify(messages[-1] if messages else None)
+    user_request = _latest_user_request(messages)
 
-    if routed == "summary_agent":
-        return Command(goto="summary_agent", update={})
+    routing_prompt = """
+You are the report coordinator in a multi-agent workflow.
+Given the user's latest request and the current content, decide what should happen next:
 
-    if routed == "document_agent":
-        return Command(goto="document_agent", update={})
+- Choose "summary_agent" when the user needs a concise executive summary.
+- Choose "document_agent" when the user needs a detailed report, formatted document, or PDF.
+- Choose "supervisor" when the content is already final or no further reporting work is required.
 
-    if routed == "complete":
-        return Command(
-            goto="supervisor",
-            update={
-                "report_complete": True,
-                "final_output": latest_message,
-            },
-        )
-
-    system_prompt = """
-    You are the Report Agent Coordinator.
-
-    Your task: analyze the user's query and decide which sub-agent should act next.
-
-    Available agents:
-    - "summary_agent" → when a concise executive summary is needed.
-    - "document_agent" → when a detailed, polished report is required.
-    - "supervisor" → when the request is already complete or unrelated to reporting.
-
-    Return a JSON object with:
-      - next_agent: one of "summary_agent", "document_agent", "supervisor"
-      - reasoning: explanation of the choice
-    """
+Return a JSON object with:
+  - next_agent: "summary_agent", "document_agent", or "supervisor"
+  - reasoning: brief explanation grounded in the user request and content
+"""
 
     decision = llm.with_structured_output(ReportRouting).invoke(
         [
-            SystemMessage(content=system_prompt),
-            HumanMessage(content=latest_message),
+            SystemMessage(content=routing_prompt.strip()),
+            HumanMessage(
+                content=(
+                    f"User request:\n{user_request}\n\n"
+                    f"Current content to evaluate:\n{latest_text}\n"
+                )
+            ),
         ]
     )
 
-    print(f"Routing to: {decision.next_agent}")
-    print(f"Reasoning: {decision.reasoning}")
+    print(f"Report routing → {decision.next_agent} ({decision.reasoning})")
 
     if decision.next_agent == "supervisor":
-        return Command(
-            goto="supervisor",
-            update={
-                "report_complete": True,
-                "final_output": latest_message,
-            },
-        )
+        return _finalize(latest_text)
 
     return Command(goto=decision.next_agent, update={})

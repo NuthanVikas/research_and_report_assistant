@@ -19,8 +19,9 @@ def summary_agent(state: AgentState) -> Command[str]:
     """
     
     result = llm.invoke([HumanMessage(content=prompt)])
+    formatted_content = result.content.strip()
     
     return Command(
         goto="report_agent",
-        update={"messages": [AIMessage(content=f"[SUMMARY]\n{result.content}")]}
+        update={"messages": [AIMessage(content=f"SUMMARY:\n{formatted_content}")]}
     )
