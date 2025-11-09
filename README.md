@@ -1,90 +1,133 @@
-# FastAPI Template with uv
+# Research & Report Assistant
 
-This project is a minimal FastAPI application managed with the Astral `uv` toolchain. Use the steps below to recreate the setup, manage dependencies, and run the development server.
+Research & Report Assistant is a FastAPI service that orchestrates a LangGraph-powered multi-agent workflow specialized for health and pharmaceutical research. It coordinates domain-specific research, multi-format reporting, and PDF generation so product teams can turn open-ended questions into decision-ready deliverables with a single API call.
+
+## Highlights
+- **Multi-agent workflow** – Supervisor, research, health, pharma, summary, and document agents collaborate through LangGraph with explicit routing logic.
+- **Live domain research** – Health and pharma specialists use Tavily search results plus GPT-4o reasoning to ground every answer in fresh evidence.
+- **Reporting automation** – Summary and document agents transform findings into executive briefs or fully formatted PDFs stored under `reports/`.
+- **FastAPI interface** – A single `POST /ask` endpoint kicks off the workflow, making it easy to embed inside dashboards, chatbots, or analyst tooling.
+- **Configurable LLM stack** – Swap OpenAI models or extend the workflow with additional agents without touching the API surface.
+
+## Architecture
+### Workflow at a glance
+```text
+User → Supervisor → Research Agent → (Health Agent | Pharma Agent) → Research Agent
+            ↓                                                ↘
+            └──────────────→ Report Agent ← (Summary Agent | Document Agent)
+                                      ↓
+                               Final answer + optional PDF
+```
+
+### Key components
+| Component | Location | Responsibility |
+| --- | --- | --- |
+| Supervisor Agent | `app/agents/supervisor.py` | Decides which specialist should act next and when to end the workflow. |
+| Research Agent | `app/agents/research.py` | Routes domain questions to health or pharma specialists via structured LLM decisions. |
+| Health & Pharma Agents | `app/agents/subagents/` | Run Tavily-powered research and return structured findings. |
+| Report Agent | `app/agents/report.py` | Chooses between summary, document creation, or finalizing the response. |
+| Summary Agent | `app/agents/subagents/summary_agent.py` | Produces concise executive summaries. |
+| Document Agent | `app/agents/subagents/document_agent.py` | Formats reports and exports PDFs with ReportLab. |
+| LangGraph State | `app/core/agent_state.py` | Tracks conversation messages and completion flags. |
+| Tools & LLMs | `app/tools/search_tool.py`, `app/utils/llms.py` | Provide Tavily search access and configured ChatOpenAI models. |
+
+## Project layout
+```
+app/
+├─ main.py                # FastAPI entrypoint
+├─ agents/
+│  ├─ supervisor.py
+│  ├─ research.py
+│  ├─ report.py
+│  └─ subagents/
+│     ├─ health_agent.py
+│     ├─ pharma_agent.py
+│     ├─ summary_agent.py
+│     └─ document_agent.py
+├─ core/
+│  ├─ agent_state.py
+│  ├─ graph.py
+│  └─ routing_models.py
+├─ tools/search_tool.py
+└─ utils/llms.py
+reports/                 # PDF outputs (created on demand)
+```
 
 ## Prerequisites
 - Python 3.13+
-- [`uv` CLI](https://docs.astral.sh/uv/)
-- Optional: `git` for version control
+- [`uv`](https://docs.astral.sh/uv/) or `pip` for dependency management
+- OpenAI account with an API key (default model: `gpt-4o`)
+- Tavily Search API key for grounded reseach
+- (Optional) `make`, `curl`, or tools you prefer for local workflows
 
-## Project Setup
-Follow these commands from your shell to bootstrap the project:
-
+## Installation & setup
 ```bash
-# 1. Create a new uv-based project
-uv init my_project
+git clone https://github.com/<your-org>/research_and_report_assistant.git
+cd research_and_report_assistant
 
-# 2. Move the entrypoint into an app package for structure
-mkdir app
-mv main.py app/
+# Using uv (recommended)
+uv sync
 
-# 3. Create and activate a virtual environment
-uv venv my-venv
-source my-venv/bin/activate
-
-# 4. Add FastAPI (with recommended extras) to the project
-uv add 'fastapi[standard]'
+# Or using pip
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
 ```
 
-## Application Entry Point
-`app/main.py` now defines a FastAPI app with a single `GET /` endpoint:
-
-```python
-from fastapi import FastAPI
-
-app = FastAPI()
-
-@app.get("/")
-def read_root():
-    return {"message": "Hello from my-template-project!"}
-```
-
-Running `python app/main.py` will start `uvicorn` thanks to the `__main__` guard, but the recommended way is to use `uv` directly (see below).
-
-## Run the Development Server
-Start the app with `uvicorn` using `uv`:
-
+### Environment variables
+Create a `.env` file (or export the variables) before running the app:
 ```bash
-uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
+OPENAI_API_KEY=sk-********************************
+TAVILY_API_KEY=tvly-******************************
+OPENAI_MODEL=gpt-4o            # Optional override
 ```
 
-Navigate to `http://127.0.0.1:8000/docs` to explore the autogenerated Swagger UI.
-
-## Version Control
-Initialize the repository and configure the remote:
-
+### Running the API
 ```bash
-git init
-git remote add origin <your-remote-url>
-git branch -M main
+uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+# or: uvicorn app.main:app --reload
 ```
+Visit `http://127.0.0.1:8000/docs` for interactive Swagger documentation.
 
-Commit your work as usual:
+## API reference
+### `GET /`
+Health check that confirms the service is running.
 
+### `POST /ask`
+Kick off the entire research-and-report workflow with one question.
+
+Request:
 ```bash
-git add .
-git commit -m "Initial FastAPI project setup"
+curl -X POST http://localhost:8000/ask \
+  -H "Content-Type: application/json" \
+  -d '{
+        "question": "Summarize recent GLP-1 obesity studies and produce a short report."
+      }'
 ```
 
-## Next Steps
-- Add more routes or routers under `app/`.
-- Configure settings via environment variables or a configuration module.
-- Add tests (e.g., with `pytest`) and wire them into your workflow.
+Response (truncated):
+```json
+{
+  "question": "Summarize recent GLP-1 obesity studies and produce a short report.",
+  "answer": "SUMMARY:\n• GLP-1 receptor agonists ...\n\nReport saved to reports/health_report_20240209_153211.pdf"
+}
+```
+The `answer` field always contains the supervisor's final message, which may include summary text and the file path of any generated PDF.
 
-## Research & Report Assistant
-The `app/agents/` package contains a LangGraph-based, multi-agent workflow featuring a supervisor, research lead, health, pharma, summary, and document specialists, plus a reporting agent. To use it:
+## Generated reports
+- PDF files are stored under `reports/health_report_<timestamp>.pdf`.
+- Each document agent run reformats LLM output into headings (`Title`, `Abstract`, `Key Findings`, `Recommendations`, `Conclusion`) using ReportLab.
+- Paths to created files are echoed in the final API response so you can stream or attach them downstream.
 
-1. Define environment variables in `.env`:
-   ```bash
-   OPENAI_API_KEY=sk-...
-   TAVILY_API_KEY=tvly-...
-   ```
-2. Build the graph in Python:
-   ```python
-   from app.agents import create_research_assistant_graph, initialize_state
+## Extending the workflow
+1. **Add a new specialist** – create another agent function under `app/agents/subagents/` and register it in `app/core/graph.py`.
+2. **Wire routing** – update the relevant routing Pydantic model in `app/core/routing_models.py` and adjust the prompts to include the new option.
+3. **Swap LLMs** – override `LLMModel(model_name="...")` or inject Anthropic/Groq clients while keeping the same LangChain interface.
+4. **Customize output formats** – modify `document_agent.py` to change templates, add charts, or export DOCX/HTML.
 
-   graph = create_research_assistant_graph()
-   state = initialize_state("Investigate recent advances in cardiology AI.")
-   result = graph.invoke(state)
-   ```
-3. The graph orchestrates research, domain analysis, outlining, and report drafting automatically.
+## Troubleshooting
+- `OPENAI_API_KEY` or `TAVILY_API_KEY` missing → ensure `.env` is loaded (the app raises helpful runtime errors otherwise).
+- No PDFs are produced → confirm `reportlab` is installed and the process has write access to the `reports/` directory.
+- Repeated routing loops → inspect console logs; each agent prints its activation and routing decision to help trace the LangGraph state.
+
+Research & Report Assistant turns complex healthcare questions into evidence-backed summaries and reports with minimal glue code—perfect for analytics portals, conversational interfaces, or internal knowledge tools. Happy automating!
